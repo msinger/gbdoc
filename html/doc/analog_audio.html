@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Analog audio mixing and volume adjustment in DMG Game Boy chip</title>
+<link rel="icon" href="/gameboy.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Documentation about how the analog audio circuit inside the DMG Game Boy chip works.">
+<style>
+ img {
+  max-width: 100%;
+  display:   inline;
+ }
+ table.default {
+  border-top:    1px solid #b2b2b2;
+  border-left:   1px solid #b2b2b2;
+  border-bottom: 1px solid #4c4c4c;
+  border-right:  1px solid #4c4c4c;
+ }
+ table.default tr th {
+   border-top:    1px solid #4c4c4c;
+   border-left:   1px solid #4c4c4c;
+   border-bottom: 1px solid #b2b2b2;
+   border-right:  1px solid #b2b2b2;
+ }
+ table.default tr td {
+   border-top:    1px solid #4c4c4c;
+   border-left:   1px solid #4c4c4c;
+   border-bottom: 1px solid #b2b2b2;
+   border-right:  1px solid #b2b2b2;
+ }
+ math {
+   math-style: normal;
+ }
+</style>
+</head>
+<body>
+<nav><p><a href="http://iceboy.a-singer.de/">Home</a></p>
+<hr></nav>
+<main><h1>Analog audio mixing and volume adjustment in DMG Game Boy chip</h1>
+<p>I will first describe all the individual analog components, and then describe how to calculate what gets output
+at the SO1 and SO2 pins. I highly recommend you have the
+<a href="https://github.com/msinger/dmg-schematics/releases">DMG-CPU B schematics</a> at page 24 and the
+<a href="dmg_cells.html">cell reference</a> open at the same time when reading through this, so you get the full picture
+what I'm talking about.</p>
+<p>Please report any errors I made <a href="https://github.com/msinger/gbdoc/issues">here</a>.</p>
+<ul>
+<li><a href="#components">Individual components</a><ul>
+<li><a href="#vdiv">Voltage divider</a></li>
+<li><a href="#dac">DAC - Digital to analog converter</a></li>
+<li><a href="#mixer">Mixer</a></li>
+<li><a href="#rv">RV - Adjustable resistor</a></li>
+<li><a href="#amp">Amplifier</a></li>
+</ul></li>
+<li><a href="#calculate">How to calculate the voltages</a></li>
+<li><a href="#testing">Testing and comparison with reality</a></li>
+</ul>
+<h2 id="components">Individual components</h2>
+<h3 id="vdiv">Voltage divider</h3>
+<p>The simplest analog part involved is a voltage divider that generates a 3V bias voltage for amplifiers. The 3V can be
+determined in two ways:</p>
+<p>1. We can measure the length of the resistors:</p>
+<p><img src="img/vdiv_measure.png?v=0" alt=""></p>
+<p>This measurement gives us:
+<math><mrow><mi>tap</mi><mo>=</mo><mfrac><mrow><mn>5</mn><mo></mo><mi>V</mi></mrow><mrow><mn>186.7</mn>
+<mo></mo><mi>µm</mi></mrow></mfrac><mo></mo><mn>112.0</mn><mo></mo><mi>µm</mi><mo>=</mo><mo>~</mo><mn>2.9</mn>
+<mo></mo><mi>V</mi></mrow></math></p>
+<p>2. We can count the bumps:</p>
+<p><img src="img/vdiv_count.png?v=0" alt=""></p>
+<p>Counting gives us:
+<math><mrow><mi>tap</mi><mo>=</mo><mfrac><mrow><mn>5</mn><mo></mo><mi>V</mi></mrow><mn>20</mn></mfrac>
+<mo></mo><mn>12</mn><mo>=</mo><mn>3</mn><mo></mo><mi>V</mi></mrow></math></p>
+<h3 id="dac">DAC - Digital to analog converter</h3>
+<p>The DACs are basically just bigger strips of the same "resistor bumps" as we have seen in the voltage divider above,
+but with multiple taps. On each tap, there is a series of
+<a href="https://en.wikipedia.org/wiki/Transmission_gate">transmission gates</a> that control which tap is actually
+being used. For pictures and schematics of the DAC, please <a href="dmg_cells.html#dac">click here</a> to switch
+over to the cell reference documentation. In addition to its primary function of converting digital signals to analog,
+the DACs also have a tap at 2.2V. This 2.2V tap is only used on the DAC of channel 2. The other three channels also have
+this tap, but it is not connected. The 2.2V are used as reference voltage for the amplifiers that do the volume
+adjustment.</p>
+<p>To determine the voltages at all the different taps of the DACs, I counted the bumps like for the voltage divider.
+In the <a href="dmg_cells.html#dac">schematic of the DAC</a>, each resistor symbol represents exactly one bump.
+Measuring the length of the resistors would be much harder here, because they are not placed on one straight line.</p>
+<p>Here is a table of all possible outputs:</p>
+<table class="default">
+<tr><th>Digital input D[0..3]</th><th>Analog output</th></tr>
+<tr><td>0 (0b0000)</td><td>0.7V</td></tr>
+<tr><td>1 (0b0001)</td><td>0.9V</td></tr>
+<tr><td>2 (0b0010)</td><td>1.1V</td></tr>
+<tr><td>3 (0b0011)</td><td>1.3V</td></tr>
+<tr><td>4 (0b0100)</td><td>1.5V</td></tr>
+<tr><td>5 (0b0101)</td><td>1.7V</td></tr>
+<tr><td>6 (0b0110)</td><td>1.9V</td></tr>
+<tr><td>7 (0b0111)</td><td>2.1V</td></tr>
+<tr><td>8 (0b1000)</td><td>2.3V</td></tr>
+<tr><td>9 (0b1001)</td><td>2.5V</td></tr>
+<tr><td>10 (0b1010)</td><td>2.7V</td></tr>
+<tr><td>11 (0b1011)</td><td>2.9V</td></tr>
+<tr><td>12 (0b1100)</td><td>3.1V</td></tr>
+<tr><td>13 (0b1101)</td><td>3.3V</td></tr>
+<tr><td>14 (0b1110)</td><td>3.5V</td></tr>
+<tr><td>15 (0b1111)</td><td>3.7V</td></tr>
+</table>
+<p>It is a linear mapping that can also be expressed as:
+<math><mrow><mi>out</mi><mo>=</mo><mo>(</mo><mrow><mn>0.2</mn><mo></mo><mi>d</mi><mo>+</mo><mn>0.7</mn></mrow><mo>)</mo>
+<mo></mo><mi>V</mi></mrow></math></p>
+<h3 id="mixer">Mixer</h3>
+<p>The mixer consists of five equal sized resistors that are all connected at one end. Each of the five resistors can be
+individually deattached by a <a href="https://en.wikipedia.org/wiki/Transmission_gate">transmission gate</a>. For pictures
+and schematics of the mixer, please <a href="dmg_cells.html#mixer">click here</a> to switch over to the cell reference
+documentation.</p>
+<p>Each of the five resistors is exactly 32 of those S-shaped units long:</p>
+<p><img src="img/mixer_step.png?v=0" alt=""></p>
+<h3 id="rv">RV - Adjustable resistor</h3>
+<p>The RV cell implements a resistor that can be digitally adjusted in eight steps. It uses
+<a href="https://en.wikipedia.org/wiki/Transmission_gate">transmission gates</a> to bridge parts of its resistance based
+on the given input. For pictures and schematics of the RV cell, please <a href="dmg_cells.html#rv">click here</a> to switch
+over to the cell reference documentation. The elemental resistor units used in this cell have the same size and shape as
+the ones in the mixer:</p>
+<p><img src="img/rv_step.png?v=0" alt=""></p>
+<p>The RV cells are used to adjust the final volume of the left and right channel. It gets controlled by the FF24 register.
+The 3-bit <span style="text-decoration:overline">ADJ</span> input of this cell is the complement of the 3-bit value
+stored in the FF24 register. Here is a table that shows the relation between register value, cell input and
+resistance:</p>
+<table class="default">
+<tr><th>FF24 bits[0..2] or bits[4..6]</th><th><span style="text-decoration:overline">ADJ[0..2]</span> input</th>
+<th>Resistance</th></tr>
+<tr><td>0 (0b000)</td><td>0b111</td><td>1 unit</td></tr>
+<tr><td>1 (0b001)</td><td>0b110</td><td>2 units</td></tr>
+<tr><td>2 (0b010)</td><td>0b101</td><td>3 units</td></tr>
+<tr><td>3 (0b011)</td><td>0b100</td><td>4 units</td></tr>
+<tr><td>4 (0b100)</td><td>0b011</td><td>5 units</td></tr>
+<tr><td>5 (0b101)</td><td>0b010</td><td>6 units</td></tr>
+<tr><td>6 (0b110)</td><td>0b001</td><td>7 units</td></tr>
+<tr><td>7 (0b111)</td><td>0b000</td><td>8 units</td></tr>
+</table>
+<p>So you just add +1 to the FF24 register fields to get the number of resistor units.</p>
+<h3 id="amp">Amplifier</h3>
+<p>For pictures and schematics of the amplifier, please <a href="dmg_cells.html#amp">click here</a>. Due to my limited
+understanding of analog electronics, I can't really tell what type of amplifier this is. But I can try to explain what
+it does: The amplifier tries to regulate its output based on the voltage difference at its inputs. If the positive (+)
+input is higher than its negative (-) input, then the voltage at the output rises. If the positive input is lower than
+the negative input, the output falls. Of course, I didn't know this at first. I figured it out by simulating the circuit.
+I will show the simulation results further below, but first I'll explain the basics. Here a piece of schematic how the
+amplifier is used in most cases:</p>
+<p><img src="img/amp_non_inverting.png?v=0" alt=""></p>
+<p>In this scenario, the amplifier basically just replicates the input voltage at its output. I believe this is what
+pros call a "<a href="https://www.allaboutcircuits.com/video-tutorials/op-amp-applications-voltage-follower/">voltage
+follower</a>" or "<a href="https://en.wikipedia.org/wiki/Buffer_amplifier">buffer amplifier</a>". The output is fed
+back to the negative input, and the amplifier regulates its output based on the difference of the inputs. So naturally
+it is only satisfied when both inputs are equal. And since the output is connected to the negative input, the output
+needs to be equal as well. We will see in the simulation that this breaks down in edge cases, but for the most part
+it works.</p>
+<p>Don't mind the 3V bias input for now. It needs to be 3V. We will see that this is just the right value when playing
+with the simulation below.</p>
+<p>For volume adjustment, the amplifier is used differently:</p>
+<p><img src="img/amp_inverting.png?v=0" alt=""></p>
+<p>This looks way more complicated, but we can simplify it to make it easier to understand. We simplify it for the
+following scenario:</p>
+<ul>
+<li>We assume that the four digital APU channels are enabled and the analog VIN channel is disabled.</li>
+<li>Most importantly: We assume that all four channels are outputting the exact same voltage.</li>
+<li>We also assume that the volume is set to 7 (max volume).</li>
+</ul>
+<p>You will see in a minute why this specific scenario is so beautifully simple. This would be the equivalent circuit
+for the described scenario:</p>
+<p><img src="img/amp_inverting_simplified1.png?v=0" alt=""></p>
+<p>If you are wondering where the "32 units" and "8 units" come from, then please read the description about the mixer
+and RV cells above.</p>
+<p>People with a trained eye in binary numbers will quickly see the relation of the numbers 32 and 8 here. And if
+those same people also know how to calculate the value of parallel resistors, then they know that we can simplify
+this even more:</p>
+<p><img src="img/amp_inverting_simplified2.png?v=0" alt=""></p>
+<p>We got a symmetric voltage divider. So let's remember what the amplifier does. It tries to equalize its inputs.
+The positive input is at fixed 2.2V. Let's assume we apply a voltage of 2.0V at the IN label. In this case, the
+amplifier needs to output a voltage of 2.4V so that its negative input (which is at the mid-point of the voltage
+divider) gets 2.2V as well, because
+<math><mrow><mfrac><mrow><mn>2.0</mn><mo></mo><mi>V</mi><mo>+</mo><mn>2.4</mn><mo></mo><mi>V</mi></mrow>
+<mn>2</mn></mfrac><mo>=</mo><mn>2.2</mn><mo></mo><mi>V</mi></mrow></math>. So this amplifier circuit inverts the
+input voltage. The point at which the input is mirrored is 2.2V.</p>
+<p>Now let's assume the volume was set to 0 (min volume). In this case, the resistor R5 would only be an eighth of R1.
+This would make the circuit a lot more sensible to changes at the amplifier output. The amplifier only needs to output
+an eighth of the voltage difference to 2.2V to achieve the 2.2V at its negative input. So if you would plot the output
+over the input voltage, it would be much more flat, close to 2.2V.</p>
+<p>Maybe you noticed already, the 2.2V are exactly the mid-point of the voltage range that the DACs can output:
+<math><mrow><mfrac><mrow><mn>0.7</mn><mo></mo><mi>V</mi><mo>+</mo><mn>3.7</mn><mo></mo><mi>V</mi></mrow>
+<mn>2</mn></mfrac><mo>=</mo><mn>2.2</mn><mo></mo><mi>V</mi></mrow></math> - So this is no coincidence that we invert
+at this voltage level.</p>
+<p>Okay, now that we understand the (in my opinion) easiest scenario of the inverting circuit, let us look at the
+simulation to get a more generic understanding. I used <a href="https://ra3xdh.github.io/">Qucs-S</a> for simulating.
+The project consists of two files: <a href="amp.sch">amp.sch</a> and <a href="sim.sch">sim.sch</a>. This is the
+circuit in amp.sch:</p>
+<p><img src="img/amp_sch.png?v=0" alt=""></p>
+<p>I didn't care about the resistor and capacitor values. I just choose small values so they don't interfere much.
+I think their purpose is to filter out high noise frequencies or maybe click sounds when switching channels on/off.
+The length and width properties of the transistors I measured on the die shot. The other transistor properties
+(Vt0 and Kp) I got from ChatGPT. I asked it to guess some fitting values for technology from that era. From my
+understanding, those are not that important for getting good simulation results. Getting the relative proportions
+of width and length correctly is more important. Those decide which transistors are stronger and which ones are weaker
+than others. You can see, there are transistors competing against each other. E1 is the BIAS input. You see that the 3V
+bias voltage constantly keeps the output PMOS P6 active to a degree. The output NMOS N5 always has to work against the
+semi active P6, so I think this is why this is called a bias. But look, for the most part I'm pulling this out of my ass,
+so take this with a huge grain of salt. E2 is the positive input, E3 is the negative input. And of course, E4 is the
+output. I didn't bother to include the enable circuit in the simulation. I'm not pretending that I understand how this
+circuit works. I only know what it does because of the colorful diagrams the simulation spat out. On this territory,
+I'm a dummy. Dummy dumm dumm.</p>
+<p>And here is the other part of the simulation where the amplifier gets used, sim.sch:</p>
+<p><img src="img/sim_sch.png?v=0" alt=""></p>
+<p>The 3V bias is provided by V1. V4 provides the 2.2V reference for the inverting amplifier scenarios. The pulse
+thingy V2 is there to run a voltage ramp from 0V to 5V at the amplifier inputs so we can plot every possible input
+value in a diagram (see below). Then we have five amplifiers as test subjects. Each of them demonstrating a slightly
+different scenario:</p>
+<table class="default">
+<tr><th>Amplifier</th><th>Scenario</th></tr>
+<tr><td>AMP1</td><td>The easy voltage follower case where output voltage equals input voltage.</td></tr>
+<tr><td>AMP2</td><td>Inverting case: Only one channel is enabled, hence R1=32kOhm (I just mapped 1 unit to
+1kOhm). Volume is set to 0, hence R2=1kOhm. This should give the flattest possible output in the diagram (except for
+the case where all channels are disabled).</td></tr>
+<tr><td>AMP3</td><td>Inverting case: Four channels are enabled, assuming the edge case that all channels provide the
+same voltage, hence R4=8kOhm. Volume is set to 3, hence R3=4kOhm.</td></tr>
+<tr><td>AMP4</td><td>Inverting case: Same as AMP3, but volume is set to 7, hence R5=8kOhm. This is the scenario we looked
+into before, where both resistors are equal.</td></tr>
+<tr><td>AMP5</td><td>Inverting case: All five channels are enabled, assuming the edge case that all channels provide the
+same voltage, hence R8=6.4kOhm. Volume is set to 7, hence R7=8kOhm. So this should give us the absolute minimum and
+maximum outputs.</td></tr>
+</table>
+<p>Finally, let's plot the diagram:</p>
+<p><img src="img/amp_sim_plot1.png?v=0" alt=""></p>
+<p>The X axis is the input voltage that gets ramped through by V2. I added dotted vertical lines at 0.7V and 3.7V,
+which are the min and max values that the DACs can provide. We see that everything is nicely linear within that range,
+except for a small piece at the bottom right of the cyan output.</p>
+<p>What I'd like to point out is that in the green case (AMP4), the inversion maps perfectly into the same range of
+values: 0.7V maps to 3.7V, and 3.7V maps to 0.7V. This is the case when all four "normal" APU channels are enabled,
+all provide the same voltage, and the volume is set to max. So if we don't support VIN in an emulator or simulator, then
+we will never leave the 0.7V-3.7V range. The cyan plot however, where all five channels are enabled, breaks out of that
+range. And theoretically, VIN is not necessarily restricted to 0.7V-3.7V anyway, since it comes from an external source.
+It could be 0V-5V, and break things even more.</p>
+<p>Out of curiosity, I also plotted the negative inputs of the inverting amps:</p>
+<p><img src="img/amp_sim_plot2.png?v=0" alt=""></p>
+<p>We can see how the amplifiers keep their inputs equal, except in the extreme cases for green and cyan.</p>
+<p>Now let's try what happens when we change the bias voltage to 2.5V:</p>
+<p><img src="img/amp_sim_plot_2v5_bias.png?v=0" alt=""></p>
+<p>We see that the window in which things behave linear shrinks. The dark blue line gets bent at the bottom, and the cyan
+also looses more linearity than before at the bottom.</p>
+<p>Let's change the bias into the other direction, to 3.5V:</p>
+<p><img src="img/amp_sim_plot_3v5_bias.png?v=0" alt=""></p>
+<p>Yeah, maybe we just don't talk about that. I think it's pretty obvious why this is not good.</p>
+<h2 id="calculate">How to calculate the voltages</h2>
+<p>Calculating the analog voltages for the four APU channels is the easiest thing. Each channel's output is represented
+by a 4-bit digital value. In the schematics those are named ch<i>n</i>_out. The output of the individual channel
+amplifiers is always the same as the output of their DACs, since they are configured as voltage followers, so we can
+directly calculate the amplifier outputs ch<i>n</i>_amp_out:</p>
+<p><math><mrow><mtext>ch<i>n</i>_amp_out</mtext><mo>=</mo><mfrac><mtext>ch<i>n</i>_out</mtext><mn>5</mn></mfrac><mo></mo>
+<mi>V</mi><mo>+</mo><mn>0.7</mn><mo></mo><mi>V</mi></mrow></math></p>
+<p>Mixing and volume adjustment is a little bit trickier, because of the resistors involved and the fact that
+channels can be enabled/disabled. Channels can be enabled/disabled directly at the mixer, simply by using the FF25
+register for channels 1-4, and by bit 3 and 7 of the FF24 register for VIN. Those two registers directly hold the
+enable signals of the two mixers. There is another way, however, how channels can be enabled/disabled: Their
+amplifiers get an enable signal from some specific register bits that are different for each channel. Here are the
+relevant pieces from the schematic:</p>
+<p><img src="img/ch_amp_ena_src.png?v=0" alt=""></p>
+<p>Channels 1, 2 and 4 have their amplifiers enabled when any of the bits 3..7 in registers FF12, FF17 or FF21
+respectively are high. Channel 3 has its amplifier enabled when bit 7 in register FF1A is high.</p>
+<p>When an amplifier is disabled, its output is undriven (high-z). This has the same effect as if the respective mixer
+input is disabled, so we can just throw both conditions together in one equation per channel:</p>
+<p><math><mrow><mi>ch1_ena_r</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x01</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF12</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch1_ena_l</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x10</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF12</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch2_ena_r</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x02</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF17</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch2_ena_l</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x20</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF17</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch3_ena_r</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x04</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF1A</mi><mo>&amp;</mo><mn>0x80</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch3_ena_l</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x40</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF1A</mi><mo>&amp;</mo><mn>0x80</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch4_ena_r</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x08</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF21</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>ch4_ena_l</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF25</mi><mo>&amp;</mo>
+<mn>0x80</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&and;</mo><mo>(</mo><mrow><mo>(</mo><mrow>
+<mi>regFF21</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow>
+<mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>vin_ena_r</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF24</mi><mo>&amp;</mo>
+<mn>0x08</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo></mrow></math></p>
+<p><math><mrow><mi>vin_ena_l</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF24</mi><mo>&amp;</mo>
+<mn>0x80</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo></mrow></math></p>
+<p>I use those boolean enable signals like integers that are either 0 or 1 in the equations below. We now have
+everything we need to be able to calculate the RADJ_AMP and LADJ_AMP outputs like this:</p>
+<p><math><mrow><mi>radj_amp_out</mi><mo>=</mo><mo>(</mo><mo>(</mo><mrow><munderover><mo>&sum;</mo><mrow><mi>n</mi><mo>=</mo>
+<mn>1</mn></mrow><mn>4</mn></munderover><mo>(</mo><mrow><mtext>ch<i>n</i>_ena_r</mtext><mo>&times;</mo><mo>(</mo>
+<mtext>ch<i>n</i>_amp_out</mtext><mo>-</mo><mn>2.2</mn><mo></mo><mi>V</mi><mo>)</mo><mo>&times;</mo><mn>0.25</mn></mrow>
+<mo>)</mo></mrow><mo>)</mo><mo>+</mo><mo>(</mo><mrow><mi>vin_ena_r</mi><mo>&times;</mo><mo>(</mo><mi>vin</mi><mo>-</mo>
+<mn>2.2</mn><mo></mo><mi>V</mi><mo>)</mo><mo>&times;</mo><mn>0.25</mn></mrow><mo>)</mo><mo>)</mo><mo>&times;</mo>
+<mo>-</mo><mfrac><mrow><mi>rvolume</mi><mo>+</mo><mn>1</mn></mrow><mn>8</mn></mfrac><mo>+</mo><mn>2.2</mn><mo></mo>
+<mi>V</mi></mrow></math></p>
+<p><math><mrow><mi>ladj_amp_out</mi><mo>=</mo><mo>(</mo><mo>(</mo><mrow><munderover><mo>&sum;</mo><mrow><mi>n</mi><mo>=</mo>
+<mn>1</mn></mrow><mn>4</mn></munderover><mo>(</mo><mrow><mtext>ch<i>n</i>_ena_l</mtext><mo>&times;</mo><mo>(</mo>
+<mtext>ch<i>n</i>_amp_out</mtext><mo>-</mo><mn>2.2</mn><mo></mo><mi>V</mi><mo>)</mo><mo>&times;</mo><mn>0.25</mn></mrow>
+<mo>)</mo></mrow><mo>)</mo><mo>+</mo><mo>(</mo><mrow><mi>vin_ena_l</mi><mo>&times;</mo><mo>(</mo><mi>vin</mi><mo>-</mo>
+<mn>2.2</mn><mo></mo><mi>V</mi><mo>)</mo><mo>&times;</mo><mn>0.25</mn></mrow><mo>)</mo><mo>)</mo><mo>&times;</mo>
+<mo>-</mo><mfrac><mrow><mi>lvolume</mi><mo>+</mo><mn>1</mn></mrow><mn>8</mn></mfrac><mo>+</mo><mn>2.2</mn><mo></mo>
+<mi>V</mi></mrow></math></p>
+<p>We have to subtract 2.2V from all input voltages, so that we can invert the signals at this voltage level.
+At the end we add the 2.2V again. Each of the five mixer inputs gets multiplied by 0.25, because, like we have seen
+in my favorite scenario that I described multiple times above (AMP4, the one where both resistors of the divider are
+equal), we need four mixer inputs to reach exactly the same voltage range at input and output (0.7V-3.7V), because
+<math><mrow><mn>4</mn><mo>&times;</mo><mn>0.25</mn><mo>=</mo><mn>1</mn></mrow></math>.</p>
+<p>The final output should be restricted between ~0.3V and ~4.3V as can be seen in the simulation plot.</p>
+<p>The analog circuit as a whole will only be enabled when at least one of the four APU channels is enabled:</p>
+<p><img src="img/amp_en.png?v=0" alt=""></p>
+<p>So this must be true, otherwise the analog outputs will be undriven (high-z):</p>
+<p><math><mrow><mi>amp_en</mi><mo>=</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF12</mi><mo>&amp;</mo><mn>0xF8</mn>
+</mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&or;</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF17</mi>
+<mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo><mo>&or;</mo><mo>(</mo><mrow>
+<mo>(</mo><mrow><mi>regFF1A</mi><mo>&amp;</mo><mn>0x80</mn></mrow><mo>)</mo><mo>&ne;</mo><mn>0</mn></mrow><mo>)</mo>
+<mo>&or;</mo><mo>(</mo><mrow><mo>(</mo><mrow><mi>regFF21</mi><mo>&amp;</mo><mn>0xF8</mn></mrow><mo>)</mo><mo>&ne;</mo>
+<mn>0</mn></mrow><mo>)</mo></mrow></math></p>
+<p>This also implies that VIN can't be enabled on its own. At least one of the four channels needs to be enabled. (They
+don't need to be enabled in the mixer though.)</p>
+<p>If amp_en is true, but all five channels are disabled in the mixer, the final output is 2.2V, because 2.2V are applied
+to {R,L}ADJ_AMPs positive input.</p>
+<h2 id="testing">Testing and comparison with reality</h2>
+The coin sound that plays when the Nintendo logo hits the center of the screen looks like this in the
+<a href="https://github.com/msinger/dmg-sim">Verilog simulation</a>:
+<p><img src="img/amp_coin_sound_sim.png?v=0" alt=""></p>
+<p>In this scenario, only channel 1 is enabled. When channel 1 is idle (not playing a sound, but is enabled), you see that
+its resting level is at 0.7V, because it inputs 0b0000 into its DAC. The left mixer output (ladj) and the analog output
+pin of the chip (lout) both read as 2.575V when channel 1 is enabled and idle. This is due to the inverting and scaling
+that happens at LADJ_AMP. Since we didn't have this scenario before, I quickly changed R2 in the spice sim to 8kOhm.
+The red line now shows channel 1 alone at full volume:</p>
+<p><img src="img/amp_sim_plot_ch1_v7.png?v=0" alt=""></p>
+<p>We can see with 0.7V input, it outputs ~2.6V.</p>
+<p>So far so good. Now let's test this in real life. I attached my oscilloscope probes to the points P1 and P2 of the
+main PCB:</p>
+<p><img src="img/gameboy_pcb_probe_points.png?v=0" alt=""></p>
+<p>Headphones must be plugged in, otherwise there will be no signal at P2.</p>
+<p>While no sound is playing and only channel 1 is enabled, we see this:</p>
+<p><img src="img/amp_idle_ch1.png?v=0" alt=""></p>
+<p>The yellow signal is at P1, the blue one is at P2. At P2 (after the DMG-AMP chip) the signal always has this huge
+offset and, like we will see further below, is much more flat. But the thing I was interested in why I attached P2:
+The signal is not inverted by the external amp. Let's display some measurements:</p>
+<p><img src="img/amp_idle2_ch1.png?v=0" alt=""></p>
+<p>We see that the average voltage at P1 is somewhere at ~2.6V which fits our calculations for an idle channel 1. Now
+we let the coin sound play:</p>
+<p><img src="img/amp_coin_sound_osc.png?v=0" alt=""></p>
+<p>Like our calculations and the simulation predicts, the voltage alternates between the ~2.6V idle state and some lower
+state which depends on the current digital volume of channel 1. (I didn't use any triggers, I just pressed stop when it
+started moving.)</p>
+<p>Now I started Zelda, from which I know that it enables all four channels during the animations before the title
+screen. I waited until Link's ship got destroyed, just before he was washed ashore. There is a short moment of
+silence:</p>
+<p><img src="img/amp_idle_ch1234.png?v=0" alt=""></p>
+<p>We see the idle voltage is much higher, at ~3.7V, when four channels are enabled. Exactly how we predicted with our
+calculations.</p>
+<p>Here is the sound of the waves:</p>
+<p><img src="img/amp_waves_ch1234.png?v=0" alt=""></p>
+<p>The upper voltage level stays at the ~3.7V. It can't go up any further, because that's not possible with only four
+channels, like we see in our spice diagrams above. But it can go down. It is very unlikely to reach the 0.7V bottom,
+because for this, all four channels would need to be at full volume and output 3.7V.</p>
+<p>And here is some high-end premium Zelda music playing:</p>
+<p><img src="img/amp_music_ch1234.png?v=0" alt=""></p>
+<p>It reaches much lower voltages. I think because it is louder.</p>
+<p>I think what we see fits the simulations.</p>
+</main><footer><hr>
+<p><a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png"></a><br>This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.</p>
+</footer></body>
+</html>
